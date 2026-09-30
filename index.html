@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Plan your Cambridge Mathematical Tripos Part III timetable: search courses, build schedules, spot clashes and export to your calendar.">
+<meta name="theme-color" content="#1f5f55">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<title>partiiischedule.io</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: two-pane app like Hyperschedule — course catalogue on the left, schedule/selected on the right; stacks on phones. */
+:root{
+  --bg:#f5f6f4; --panel:#ffffff; --fg:#1c2421; --muted:#5f6b66; --line:#dde2df;
+  --accent:#1f5f55; --accent-ink:#ffffff; --accent-soft:#e2eeeb;
+  --star:#b7791f; --danger:#b3261e; --danger-soft:#fbe9e7; --hover:#eef2f0;
+  --f-display:"Fraunces", Georgia, serif;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --h-mich:24; --h-lent:210; --h-east:140;
+  --blk-s:62%; --blk-l:86%; --blk-ink:22%; --blk-edge:45%;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121715; --panel:#19201d; --fg:#e4ebe8; --muted:#94a39d; --line:#2b3531;
+  --accent:#6cc4b3; --accent-ink:#0d1714; --accent-soft:#1f302b;
+  --star:#e4b04e; --danger:#ff8a80; --danger-soft:#3a1f1d; --hover:#212a26;
+  --blk-s:38%; --blk-l:26%; --blk-ink:88%; --blk-edge:60%; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121715; --panel:#19201d; --fg:#e4ebe8; --muted:#94a39d; --line:#2b3531;
+  --accent:#6cc4b3; --accent-ink:#0d1714; --accent-soft:#1f302b;
+  --star:#e4b04e; --danger:#ff8a80; --danger-soft:#3a1f1d; --hover:#212a26;
+  --blk-s:38%; --blk-l:26%; --blk-ink:88%; --blk-edge:60%; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.45}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{display:flex;flex-direction:column;height:100%;padding-inline:16px}
+header.top{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-block:12px;border-bottom:1px solid var(--line)}
+.brand{font-family:var(--f-display);font-weight:650;font-size:22px;letter-spacing:-.01em;margin:0}
+.brand span{color:var(--accent)}
+.sub{color:var(--muted);font-size:12.5px}
+.top .spacer{flex:1}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;background:none;padding:6px 12px;font-size:13px;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 11px;font-size:13px}
+.btn:hover{background:var(--hover)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--danger)}
+.icon{border:0;background:none;padding:4px;border-radius:6px;color:var(--muted);line-height:0}
+.icon:hover{background:var(--hover);color:var(--fg)}
+.icon svg{width:17px;height:17px}
+
+main.panes{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px;padding-block:14px}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-height:0;min-width:0}
+.pane-head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.search{display:flex;gap:8px}
+.search input{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 11px}
+.filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:3px 10px;font-size:12.5px;color:var(--muted)}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--fg)}
+.filters select{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:3px 8px;font-size:12.5px;color:var(--muted)}
+.count{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.list{overflow:auto;flex:1;min-height:0}
+.term-sep{position:sticky;top:0;z-index:1;background:var(--panel);padding:8px 14px 6px;font-family:var(--f-display);font-size:15px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:baseline}
+.term-sep small{font-family:var(--f-body);color:var(--muted);font-size:12px}
+.row{display:grid;grid-template-columns:6px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px 8px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.row:hover,.row.hl{background:var(--hover)}
+.row .sw{align-self:stretch;border-radius:0 3px 3px 0}
+.row .t{font-weight:600;font-size:13.5px;overflow-wrap:anywhere}
+.row .m{font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 10px}
+.mono{font-family:var(--f-mono);font-size:12px}
+.row .acts{display:flex;gap:2px;align-items:center}
+.row.conflict .t{color:var(--muted)}
+.tag-conf{font-size:11px;color:var(--danger);background:var(--danger-soft);border-radius:4px;padding:0 5px}
+.added{color:var(--accent)}
+.details{padding:6px 14px 12px 16px;border-bottom:1px solid var(--line);background:var(--bg);font-size:13px;display:grid;gap:4px}
+.details dl{display:grid;grid-template-columns:max-content 1fr;gap:3px 12px;margin:0}
+.details dt{color:var(--muted)}
+.details dd{margin:0}
+.note{color:var(--danger)}
+.empty{padding:28px 18px;color:var(--muted);text-align:center}
+
+.right-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sched-pick{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sched-pick select{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:5px 8px;max-width:180px}
+.stats{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.stats b{color:var(--fg);font-weight:600}
+.toggle{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;color:var(--muted)}
+
+.cal-wrap{flex:1;min-height:0;overflow:auto;padding:10px 12px 14px}
+.cal{display:grid;grid-template-columns:44px repeat(var(--days),minmax(72px,1fr));position:relative;min-width:calc(44px + var(--days)*72px)}
+.cal .dh{font-size:12px;font-weight:600;text-align:center;padding-bottom:6px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.cal .hr{font-size:11px;color:var(--muted);text-align:right;padding-right:6px;transform:translateY(-7px);font-variant-numeric:tabular-nums}
+.cal .cell{border-top:1px solid var(--line);border-left:1px solid var(--line);height:var(--slot)}
+.cal .col-end{border-right:1px solid var(--line)}
+.blk{position:absolute;border-radius:7px;padding:4px 6px;font-size:11.5px;line-height:1.25;overflow:hidden;cursor:pointer;border:1px solid;display:flex;flex-direction:column;gap:1px}
+.blk b{font-weight:600;overflow-wrap:anywhere}
+.blk .mono{font-size:10.5px;opacity:.85}
+.blk.ghost{opacity:.6;border-style:dashed}
+.blk.clash{outline:2px solid var(--danger);outline-offset:-2px}
+.blk:hover{filter:brightness(.97)}
+
+.sel{border-top:1px solid var(--line);max-height:36%;overflow:auto}
+.sel h3{margin:0;padding:10px 14px 4px;font-family:var(--f-display);font-weight:500;font-size:15px;display:flex;justify-content:space-between;align-items:baseline}
+.sel h3 small{font-family:var(--f-body);font-size:12px;color:var(--muted)}
+.srow{display:grid;grid-template-columns:auto 10px minmax(0,1fr) auto;gap:8px;align-items:center;padding:5px 12px;border-bottom:1px solid var(--line);font-size:13px}
+.srow[draggable="true"]{cursor:grab}
+.srow.drag{opacity:.4}
+.srow.over{box-shadow:inset 0 2px 0 var(--accent)}
+.srow .dot{width:10px;height:10px;border-radius:3px}
+.srow .nm{overflow-wrap:anywhere}
+.srow .nm small{color:var(--muted);margin-left:6px}
+.srow.off .nm{color:var(--muted);text-decoration:line-through}
+.srow.bumped .nm{color:var(--muted)}
+.starred svg{fill:var(--star);color:var(--star)}
+
+.modal-bg{position:fixed;inset:0;background:rgb(0 0 0 / .4);display:grid;place-items:center;padding:16px;z-index:10}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:560px;width:100%;max-height:90%;overflow:auto;padding:18px;display:grid;gap:12px}
+.modal h2{margin:0;font-family:var(--f-display);font-weight:650;font-size:21px;text-wrap:balance}
+.modal textarea{width:100%;min-height:160px;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px;font-family:var(--f-mono);font-size:11.5px}
+.modal .row-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.modal p{margin:0;color:var(--muted)}
+.modal input[type=text]{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 10px;width:100%}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;z-index:20}
+.mobile-tabs{display:none}
+footer.foot{font-size:11.5px;color:var(--muted);padding-block:0 10px}
+footer.foot a{color:var(--accent)}
+
+@media (max-width:860px){
+  .app{height:auto}
+  main.panes{grid-template-columns:minmax(0,1fr)}
+  .mobile-tabs{display:flex;padding-top:10px}
+  .pane[data-mhide="1"]{display:none}
+  .list{max-height:none}
+  .cal-wrap{max-height:none}
+  .sel{max-height:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="top">
+    <div>
+      <h1 class="brand">partiii<span>schedule</span>.io</h1>
+      <div class="sub">Mathematical Tripos Part III · 2026–27 · lecture list updated 28 Sep 2026</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="seg" role="group" aria-label="Term">
+      <button id="t-M" data-term="M">Michaelmas</button>
+      <button id="t-L" data-term="L">Lent</button>
+      <button id="t-E" data-term="E">Easter</button>
+    </div>
+    <button class="btn" id="btn-export">Export calendar</button>
+    <button class="btn" id="btn-share">Import / export</button>
+    <button class="icon" id="btn-theme" title="Toggle dark mode" aria-label="Toggle dark mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+  </header>
+
+  <div class="mobile-tabs seg" role="group" aria-label="View">
+    <button id="mt-courses" aria-pressed="true">Courses</button>
+    <button id="mt-schedule" aria-pressed="false">Schedule</button>
+  </div>
+
+  <main class="panes">
+    <section class="pane" id="pane-courses">
+      <div class="pane-head">
+        <div class="search">
+          <input id="q" type="search" placeholder="Search courses, lecturers, rooms, days… e.g. “MWF 10” or “Tong”" autocomplete="off">
+        </div>
+        <div class="filters" id="filters"></div>
+        <div class="count" id="count"></div>
+      </div>
+      <div class="list" id="list"></div>
+    </section>
+
+    <section class="pane" id="pane-sched" data-mhide="1">
+      <div class="pane-head">
+        <div class="right-head">
+          <div class="sched-pick">
+            <select id="sched-select" aria-label="Schedule"></select>
+            <button class="btn" id="sched-new">New</button>
+            <button class="btn" id="sched-more">Rename / copy</button>
+          </div>
+          <div class="spacer" style="flex:1"></div>
+          <label class="toggle"><input type="checkbox" id="cf"> Conflict-free mode</label>
+          <label class="toggle"><input type="checkbox" id="sat"> Show Saturday</label>
+        </div>
+        <div class="stats" id="stats"></div>
+      </div>
+      <div class="cal-wrap"><div class="cal" id="cal"></div></div>
+      <div class="sel" id="sel"></div>
+    </section>
+  </main>
+  <footer class="foot">Times from the Faculty's <a href="https://www.maths.cam.ac.uk/undergrad/files/lecturelist/current/Part_III.pdf" target="_blank" rel="noopener">Part III lecture list</a>. Lectures in the CMS Meeting Rooms unless stated. Areas are an unofficial grouping for filtering. Always check <a href="http://www.timetable.cam.ac.uk" target="_blank" rel="noopener">timetable.cam.ac.uk</a> for changes.</footer>
+</div>
+<div id="modal-root"></div>
+
+<script>
+// ---------- Data (from Part_III.pdf, last update 28 Sep 2026) ----------
+// days: M Tu W Th F S ; start hour (24h) ; dur in hours
+const TERMS={
+  M:{name:"Michaelmas 2026",start:"2026-10-08",end:"2026-12-02"},
+  L:{name:"Lent 2027",start:"2027-01-21",end:"2027-03-17"},
+  E:{name:"Easter 2027",start:"2027-04-29",end:"2027-05-26"}
+};
+const RAW=[
+// term, title, lecturers, days, hour, room, area, extra
+["M","Cosmology","Prof. E. Pajer","MWF",9,"MR3","Astrophysics & Cosmology"],
+["M","Algebraic Topology","Prof. O. Randal-Williams","MWF",9,"MR5","Geometry & Topology"],
+["M","Model Theory","Dr M. Tong","MW",9,"MR11","Logic"],
+["M","Percolation and Related Topics","Dr S. Sarkar","MW",9,"MR12","Probability"],
+["M","Analysis of Partial Differential Equations","Dr Z. Wyatt","MWF",9,"MR13","Analysis",{notes:["First lecture Mon 12 Oct."],first:"2026-10-12"}],
+["M","Algebraic Geometry","Dr S. Canning","MWF",10,"MR4","Algebra & Number Theory"],
+["M","Additive Combinatorics","Prof. J. Wolf","MWF",10,"MR5","Combinatorics"],
+["M","Galaxy Formation and Dynamics","Prof. W. Evans","MWF",10,"MR11","Astrophysics & Cosmology"],
+["M","Slow Viscous Flow","Prof. J. Lister","MWF",10,"MR12","Fluids & Applied"],
+["M","Mathematical Methods in Data Science","Prof. A. Shadrin, Dr G. Stepaniants","MWF",10,"MR13","Statistics & Data"],
+["M","Robust Statistics","Prof. P-L. Loh","MW",10,"MR14","Statistics & Data"],
+["M","Quantum Field Theory","Prof. A. Castro","MWF",11,"MR2","Theoretical Physics"],
+["M","Analytic Number Theory","Prof. H. Krieger","MWF",11,"MR5","Algebra & Number Theory"],
+["M","Information Theory","Dr L. Gavalakis","MW",11,"MR9","Probability"],
+["M","Planetary System Dynamics","Prof. M. Wyatt","MWF",11,"MR11","Astrophysics & Cosmology"],
+["M","Biological Physics","Prof. R. Goldstein","MWF",11,"MR12","Fluids & Applied"],
+["M","Causal Inference and Statistical Designs","Dr Q. Zhao","MW",11,"MR14","Statistics & Data"],
+["M","Symmetries, Fields and Particles","Prof. B. Allanach","MWF",12,"MR2","Theoretical Physics"],
+["M","Modern Statistical Methods","Prof. R. Shah","MWF",12,"MR5","Statistics & Data"],
+["M","Commutative Algebra","Dr N. Williams","MWF",12,"MR9","Algebra & Number Theory"],
+["M","Structure and Evolution of Stars","Dr A. Zytkow","MWF",12,"MR11","Astrophysics & Cosmology"],
+["M","Applied Analysis","Dr G. Stepaniants, Prof. D. Stuart","MWF",12,"MR13","Analysis"],
+["M","Advanced Probability","Prof. J. Norris","TuThS",9,"MR3","Probability"],
+["M","Quantum Information Theory","Dr A. Capel","TuTh",9,"MR5","Quantum Information"],
+["M","Combinatorics","Prof. I. Leader","TuTh",9,"MR9","Combinatorics"],
+["M","Perturbation Methods","Dr L. Ayton","TuTh",9,"MR12","Fluids & Applied"],
+["M","Statistical Field Theory","Prof. H. Reall","TuTh",10,"MR2","Theoretical Physics"],
+["M","Lie Algebras and Their Representations","Prof. I. Grojnowski","TuThS",10,"MR4","Algebra & Number Theory"],
+["M","The Continuum Hypothesis","Prof. B. Löwe","TuTh",10,"MR11","Logic",{notes:["Tue 3 Nov rescheduled to Sat 31 Oct, 10am, MR11."],ex:["2026-11-03"],add:[["2026-10-31",10,1,"MR11"]]}],
+["M","Biological Flows","Prof. E. Lauga","TuTh",10,"MR12","Fluids & Applied"],
+["M","Ramsey Theory","Dr M-R. Ivan","TuTh",11,"MR3","Combinatorics"],
+["M","Statistics in Medicine (Modules A, B, C: Statistics in Medical Practice)","Dr C. Jackson and colleagues","TuTh",11,"MR11","Statistics & Data",{count:12,notes:["Twelve lectures.","No lecture Tue 10 Nov; additional guest lecture Thu 26 Nov at 11 in MR11.","With Modules D, E, F in Lent, this makes up the 24-lecture Statistics in Medicine course, examined as a Michaelmas course."],ex:["2026-11-10"]}],
+["M","Differential Geometry","Dr Y. Li","TuThS",11,"MR9","Geometry & Topology"],
+["M","Astrophysical Fluid Dynamics","Prof. G. Ogilvie","TuThS",11,"MR12","Astrophysics & Cosmology",{notes:["Tue 10 Nov rescheduled to Tue 27 Oct, 2pm, MR9.","Thu 12 Nov rescheduled to Thu 3 Dec, 11am, MR12."],ex:["2026-11-10","2026-11-12"],add:[["2026-10-27",14,1,"MR9"],["2026-12-03",11,1,"MR12"]]}],
+["M","Quantum Information, Foundations and Gravity","Prof. A. Kent","TuTh",11,"MR13","Quantum Information"],
+["M","General Relativity","Prof. D. Skinner","TuThS",12,"MR2","Theoretical Physics"],
+["M","Functional Analysis","Dr A. Zsák","TuThS",12,"MR4","Analysis"],
+["M","Local Fields","Prof. T. Fisher","TuTh",12,"MR5","Algebra & Number Theory"],
+["M","The Ising Model","Dr F. Klausen","TuTh",12,"MR12","Probability"],
+["M","Laboratory Demonstrations in Fluid Dynamics","Dr M. Jalaal, Dr Q. Kriaa","W",14,"Fluids Laboratory","Fluids & Applied",{dur:1.5,count:8,notes:["Eight practicals, Wednesdays 2–3:30pm."]}],
+
+["L","Stochastic Calculus","Prof. J. Miller","MWF",9,"MR3","Probability"],
+["L","Group Cohomology","Dr M. Kudlinska","MW",9,"MR5","Algebra & Number Theory"],
+["L","String Theory","Prof. N. Dorey","MWF",9,"MR9","Theoretical Physics"],
+["L","Spectra, Algorithms, and Data in Infinite Dimensions","Dr M. Colbrook","MW",9,"MR11","Analysis"],
+["L","Complex Manifolds","Dr M. Jeffs","MWF",9,"MR12","Geometry & Topology"],
+["L","Fluid Dynamics of Climate","Prof. P. Haynes, Dr A. Ming","MWF",9,"MR13","Fluids & Applied"],
+["L","Advanced Quantum Field Theory","Prof. C. Thomas","MWF",10,"MR2","Theoretical Physics"],
+["L","Diophantine Analysis","Prof. P. Varjú","MWF",10,"MR9","Algebra & Number Theory"],
+["L","Schramm–Loewner Evolutions","Dr E. Kammerer","MF",10,"MR11","Probability"],
+["L","Fluid Dynamics of Solid Earth","Dr Q. Kriaa, Prof. J. Neufeld","MWF",10,"MR13","Fluids & Applied"],
+["L","Intersection Theory","Dr J. Jackson","MWF",10,"MR14","Algebra & Number Theory"],
+["L","Elliptic Curves","Dr A. Morgan","MWF",11,"MR3","Algebra & Number Theory"],
+["L","Field Theory in Cosmology","Prof. E. P. S. Shellard, Prof. B. Sherwin","MWF",11,"MR4","Astrophysics & Cosmology"],
+["L","Elliptic Partial Differential Equations","Dr G. Orriols","MWF",11,"MR9","Analysis"],
+["L","Logic and Computability","Dr J. Siqueira","MWF",11,"MR11","Logic"],
+["L","Noisy Mechanics","Dr R. Adhikari, Prof. M. Cates","MWF",11,"MR12","Fluids & Applied"],
+["L","Homotopy Theory","Dr R. Stoll","MWF",11,"MR14","Geometry & Topology"],
+["L","The Standard Model","Prof. M. Ubiali","MWF",12,"MR2","Theoretical Physics"],
+["L","Statistical Learning in Practice","Dr S. Bacallado","MWF",12,"MR5","Statistics & Data"],
+["L","Non-Newtonian Fluid Mechanics","Dr D. Hewitt, Dr M. Jalaal","MWF",12,"MR11","Fluids & Applied"],
+["L","Extrasolar Planets: Atmospheres and Interiors","Prof. N. Madhusudhan","MWF",12,"MR12","Astrophysics & Cosmology"],
+["L","Riemannian Geometry","Dr A. Kovalev","MWF",12,"MR13","Geometry & Topology"],
+["L","Black Holes","Prof. C. Warnick","TuThS",9,"MR2","Theoretical Physics"],
+["L","Probabilistic Combinatorics","Prof. J. Sahasrabudhe","TuThS",9,"MR4","Combinatorics"],
+["L","Hydrodynamic Stability","Prof. R. Kerswell","TuTh",9,"MR13","Fluids & Applied"],
+["L","Topological Quantum Matter","Prof. B. Bèri","TuTh",10,"MR5","Theoretical Physics"],
+["L","Topics in Statistical Theory","Prof. R. Nickl","TuTh",10,"MR9","Statistics & Data"],
+["L","Statistics in Medicine (Modules D, E, F: Analysis of Survival Data)","Dr P. Treasure","TuTh",10,"MR11","Statistics & Data",{count:12,notes:["Twelve lectures.","With Modules A, B, C in Michaelmas, this makes up the 24-lecture Statistics in Medicine course, examined as a Michaelmas course."]}],
+["L","Astrophysical Black Holes","Dr D. Sijacki","TuTh",10,"MR13","Astrophysics & Cosmology"],
+["L","Concentration Inequalities","Prof. V. Jog","TuTh",11,"MR4","Probability"],
+["L","Solitons, Instantons and Geometry","Prof. M. Dunajski","TuTh",11,"MR5","Theoretical Physics"],
+["L","Random Walks and Phase Transitions","Prof. P-F. Rodriguez","TuThS",11,"MR9","Probability"],
+["L","Algebraic Geometry II: Curves and Surfaces","Prof. D. Ranganathan","TuThS",11,"MR12","Algebra & Number Theory"],
+["L","Quantum Entanglement in Many-Body Physics","Prof. F. Verstraete","TuTh",11,"MR14","Quantum Information"],
+["L","Dynamics of Astrophysical Discs","Prof. R. Rafikov","TuTh",11,"MR13","Astrophysics & Cosmology"],
+["L","Astrostatistics","Prof. K. Mandel","TuThS",12,"MR13","Astrophysics & Cosmology"],
+
+["E","Gauge/Gravity Duality","Prof. J. Santos","MTuThF",10,"MR3","Theoretical Physics"],
+["E","Gravitational Waves and Numerical Relativity","Prof. U. Sperhake","MTuThF",11,"MR3","Theoretical Physics"],
+];
+const DAYS=["M","Tu","W","Th","F","S"];
+const DAYNAME={M:"Mon",Tu:"Tue",W:"Wed",Th:"Thu",F:"Fri",S:"Sat"};
+const ICSDAY={M:"MO",Tu:"TU",W:"WE",Th:"TH",F:"FR",S:"SA"};
+function parseDays(s){return s.match(/Tu|Th|M|W|F|S/g)}
+function slug(s){return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")}
+function hash(s){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))>>>0;return h}
+const COURSES=RAW.map(([term,title,lect,days,hour,room,area,x={}])=>{
+  const d=parseDays(days);
+  const perWeek=d.length;
+  const weeks=term==="E"?4:8;
+  const lectures=x.count??perWeek*weeks;
+  return {id:term+"-"+slug(title),term,title,lect,days:d,hour,dur:x.dur??1,room,area,
+    notes:x.notes||[],ex:x.ex||[],add:x.add||[],first:x.first,count:x.count,
+    lectures,estimated:!x.count,hue:(hash(title)%360)};
+});
+const BYID=Object.fromEntries(COURSES.map(c=>[c.id,c]));
+const AREAS=[...new Set(COURSES.map(c=>c.area))].sort();
+
+// ---------- State ----------
+const STORE="partiii-schedule-v1";
+function defaultState(){return{term:"M",schedules:[{name:"My schedule",items:[]}],cur:0,cf:false,sat:true,filters:{areas:[],days:[],hours:[],hideConf:false,onlyTerm:true}}}
+let S=defaultState();
+try{const raw=localStorage.getItem(STORE);if(raw){const p=JSON.parse(raw);S={...S,...p,filters:{...S.filters,...(p.filters||{})}}}}catch(e){}
+S.schedules.forEach(s=>s.items=s.items.filter(i=>BYID[i.id]));
+if(!S.schedules.length)S.schedules=defaultState().schedules;
+if(S.cur>=S.schedules.length)S.cur=0;
+function save(){try{localStorage.setItem(STORE,JSON.stringify(S))}catch(e){}}
+const sched=()=>S.schedules[S.cur];
+let open=null, hover=null, q="";
+
+// ---------- Helpers ----------
+const $=s=>document.querySelector(s);
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function fmtH(h){const hh=Math.floor(h),mm=Math.round((h-hh)*60);const ap=hh>=12?"pm":"am";const d=hh>12?hh-12:hh;return d+(mm?":"+String(mm).padStart(2,"0"):"")+ap}
+function timeStr(c){return c.days.map(d=>DAYNAME[d].slice(0,d.length>1?2:1)).join("")}
+function slotStr(c){return c.days.join(" ")+" · "+fmtH(c.hour)+"–"+fmtH(c.hour+c.dur)}
+function overlaps(a,b){return a.term===b.term&&a.days.some(d=>b.days.includes(d))&&a.hour<b.hour+b.dur&&b.hour<a.hour+a.dur}
+function col(c,k){return `hsl(${c.hue} var(--blk-s) ${k==="bg"?"var(--blk-l)":k==="ink"?"var(--blk-ink)":"var(--blk-edge)"})`}
+function inSched(id){return sched().items.find(i=>i.id===id)}
+const ICON={
+ plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
+ check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12l5 5 9-10"/></svg>',
+ star:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.3l1.1-6.2L3 9.7l6.2-.9z"/></svg>',
+ x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+ up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 15l6-6 6 6"/></svg>',
+ down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>'
+};
+
+// Hyperschedule-style resolution: starred first, then list order; in conflict-free mode, drop anything clashing with a higher-priority course.
+function resolved(){
+  const items=sched().items.filter(i=>i.on);
+  const ordered=[...items.filter(i=>i.star),...items.filter(i=>!i.star)];
+  const shown=[],bumped=new Set(),clash=new Set();
+  for(const it of ordered){
+    const c=BYID[it.id];
+    const hit=shown.filter(s=>overlaps(s,c));
+    if(hit.length){ if(S.cf){bumped.add(c.id);continue} clash.add(c.id);hit.forEach(h=>clash.add(h.id)) }
+    shown.push(c);
+  }
+  return{shown,bumped,clash};
+}
+
+// ---------- Search ----------
+function matches(c,terms){
+  const hay=(c.title+" "+c.lect+" "+c.room+" "+c.area+" "+c.days.join("")+" "+c.days.join(" ")+" "+c.days.map(d=>DAYNAME[d]).join(" ")+" "+c.hour+" "+fmtH(c.hour)+" "+TERMS[c.term].name).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  return terms.every(t=>hay.includes(t));
+}
+function filtered(){
+  const terms=q.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").split(/\s+/).filter(Boolean);
+  const F=S.filters;const {shown}=resolved();
+  return COURSES.filter(c=>{
+    if(F.onlyTerm&&c.term!==S.term)return false;
+    if(F.areas.length&&!F.areas.includes(c.area))return false;
+    if(F.days.length&&!c.days.some(d=>F.days.includes(d)))return false;
+    if(F.hours.length&&!F.hours.includes(c.hour>=13?"pm":String(c.hour)))return false;
+    if(F.hideConf&&!inSched(c.id)&&shown.some(s=>overlaps(s,c)))return false;
+    return matches(c,terms);
+  });
+}
+
+// ---------- Render ----------
+function renderFilters(){
+  const F=S.filters;
+  const hoursOpts=[["9","9am"],["10","10am"],["11","11am"],["12","12pm"],["pm","Afternoon"]];
+  $("#filters").innerHTML=
+    `<button class="chip" data-f="onlyTerm" aria-pressed="${F.onlyTerm}">This term only</button>`+
+    `<button class="chip" data-f="hideConf" aria-pressed="${F.hideConf}">Hide conflicting</button>`+
+    DAYS.map(d=>`<button class="chip" data-day="${d}" aria-pressed="${F.days.includes(d)}">${DAYNAME[d]}</button>`).join("")+
+    hoursOpts.map(([v,l])=>`<button class="chip" data-hr="${v}" aria-pressed="${F.hours.includes(v)}">${l}</button>`).join("")+
+    `<select id="area-sel" aria-label="Area"><option value="">All areas</option>${AREAS.map(a=>`<option ${F.areas[0]===a?"selected":""}>${esc(a)}</option>`).join("")}</select>`+
+    ((F.days.length||F.hours.length||F.areas.length||q)?`<button class="chip" id="clr">Clear</button>`:"");
+}
+function courseRow(c,shown){
+  const it=inSched(c.id);
+  const conf=!it&&shown.some(s=>overlaps(s,c));
+  const isOpen=open===c.id;
+  return `<div class="row ${conf?"conflict":""} ${hover===c.id?"hl":""}" data-id="${c.id}" aria-expanded="${isOpen}">
+    <span class="sw" style="background:${col(c,"edge")}"></span>
+    <div style="min-width:0">
+      <div class="t">${esc(c.title)}</div>
+      <div class="m"><span>${esc(c.lect)}</span><span class="mono">${slotStr(c)}</span><span class="mono">${esc(c.room)}</span>${conf?'<span class="tag-conf">clashes</span>':""}${c.notes.length&&c.id!=="M-laboratory-demonstrations-in-fluid-dynamics"?'<span class="tag-conf" style="color:var(--star);background:transparent">changes</span>':""}</div>
+    </div>
+    <div class="acts">
+      <button class="icon ${it?"added":""}" data-act="toggle" aria-label="${it?"Remove from":"Add to"} schedule" title="${it?"Remove from":"Add to"} schedule">${it?ICON.check:ICON.plus}</button>
+    </div>
+  </div>`+(isOpen?details(c):"");
+}
+function details(c){
+  return `<div class="details"><dl>
+    <dt>Term</dt><dd>${TERMS[c.term].name}</dd>
+    <dt>Lecturer${c.lect.includes(",")?"s":""}</dt><dd>${esc(c.lect)}</dd>
+    <dt>When</dt><dd>${c.days.map(d=>DAYNAME[d]).join(", ")} · ${fmtH(c.hour)}–${fmtH(c.hour+c.dur)}</dd>
+    <dt>Where</dt><dd>${esc(c.room)}${c.room.startsWith("MR")?", Centre for Mathematical Sciences":""}</dd>
+    <dt>Length</dt><dd>${c.estimated?"about ":""}${c.lectures} ${c.id.startsWith("M-laboratory")?"practicals":"lectures"}${c.estimated?` <span style="color:var(--muted)">(${c.days.length}/week × ${c.term==="E"?4:8} weeks)</span>`:""}</dd>
+    <dt>Area</dt><dd>${esc(c.area)}</dd>
+  </dl>${c.notes.map(n=>`<div class="note">${esc(n)}</div>`).join("")}</div>`;
+}
+function renderList(){
+  const list=filtered();const {shown}=resolved();
+  $("#count").textContent=`${list.length} course${list.length===1?"":"s"}`;
+  if(!list.length){$("#list").innerHTML=`<div class="empty">No courses match. Try fewer words, or turn off “This term only”.</div>`;return}
+  let html="";
+  for(const t of ["M","L","E"]){
+    const g=list.filter(c=>c.term===t);if(!g.length)continue;
+    g.sort((a,b)=>a.hour-b.hour||DAYS.indexOf(a.days[0])-DAYS.indexOf(b.days[0])||a.title.localeCompare(b.title));
+    html+=`<div class="term-sep">${TERMS[t].name}<small>${g.length}</small></div>`+g.map(c=>courseRow(c,shown)).join("");
+  }
+  $("#list").innerHTML=html;
+}
+function renderCal(){
+  const {shown,clash}=resolved();
+  const days=S.sat?DAYS:DAYS.slice(0,5);
+  const termShown=shown.filter(c=>c.term===S.term);
+  let preview=null;
+  if(hover&&!inSched(hover)&&BYID[hover].term===S.term)preview=BYID[hover];
+  const all=[...termShown,...(preview?[preview]:[])];
+  let h0=9,h1=13;
+  all.forEach(c=>{h0=Math.min(h0,Math.floor(c.hour));h1=Math.max(h1,Math.ceil(c.hour+c.dur))});
+  const slot=58;
+  const cal=$("#cal");
+  cal.style.setProperty("--days",days.length);cal.style.setProperty("--slot",slot+"px");
+  let html=`<div></div>`+days.map(d=>`<div class="dh">${DAYNAME[d]}</div>`).join("");
+  for(let h=h0;h<h1;h++){html+=`<div class="hr">${fmtH(h)}</div>`+days.map((d,i)=>`<div class="cell ${i===days.length-1?"col-end":""}"></div>`).join("")}
+  html+=`<div class="hr">${fmtH(h1)}</div>`+days.map(()=>`<div style="border-top:1px solid var(--line)"></div>`).join("");
+  cal.innerHTML=html;
+  // position blocks after layout
+  requestAnimationFrame(()=>{
+    const heads=[...cal.querySelectorAll(".dh")];
+    const top0=heads[0].offsetTop+heads[0].offsetHeight;
+    const blocks=[];
+    for(const d of days){
+      const here=all.filter(c=>c.days.includes(d));
+      // lane assignment for overlaps
+      const lanes=[];
+      here.sort((a,b)=>a.hour-b.hour).forEach(c=>{
+        let l=lanes.findIndex(end=>end<=c.hour);if(l<0){l=lanes.length;lanes.push(0)}lanes[l]=c.hour+c.dur;c._lane=l;
+      });
+      const n=Math.max(1,lanes.length);
+      const hd=heads[days.indexOf(d)];
+      here.forEach(c=>{
+        const w=(hd.offsetWidth-6)/n;
+        const x=hd.offsetLeft+3+c._lane*w;
+        const y=top0+(c.hour-h0)*slot+2;
+        const ht=c.dur*slot-4;
+        const ghost=preview&&c.id===preview.id;
+        blocks.push(`<div class="blk ${ghost?"ghost":""} ${clash.has(c.id)?"clash":""}" data-id="${c.id}" style="left:${x}px;top:${y}px;width:${w-3}px;height:${ht}px;background:${col(c,"bg")};color:${col(c,"ink")};border-color:${col(c,"edge")}" title="${esc(c.title)}"><b>${esc(c.title)}</b><span class="mono">${esc(c.room)}</span></div>`);
+      });
+    }
+    cal.insertAdjacentHTML("beforeend",blocks.join(""));
+  });
+}
+function renderStats(){
+  const {shown,bumped,clash}=resolved();
+  const parts=["M","L","E"].map(t=>{const cs=shown.filter(c=>c.term===t);return{t,n:cs.length,hrs:cs.reduce((a,c)=>a+c.days.length*c.dur,0),lec:cs.reduce((a,c)=>a+c.lectures,0)}});
+  const cur=parts.find(p=>p.t===S.term);
+  $("#stats").innerHTML=`<span><b>${cur.n}</b> course${cur.n===1?"":"s"} this term</span><span><b>${cur.hrs}</b> contact hrs/week</span>`+
+    parts.map(p=>`<span>${TERMS[p.t].name.split(" ")[0]}: <b>${p.n}</b></span>`).join("")+
+    (()=>{const n=[...clash].filter(id=>BYID[id].term===S.term).length,o=clash.size-n;return (n?`<span style="color:var(--danger)"><b style="color:inherit">${n}</b> clashing this term</span>`:"")+(o?`<span style="color:var(--danger)"><b style="color:inherit">${o}</b> clashing in other terms</span>`:"")})()+
+    (bumped.size?`<span style="color:var(--danger)"><b style="color:inherit">${bumped.size}</b> hidden by conflicts</span>`:"");
+}
+function renderSel(){
+  const {bumped,clash}=resolved();
+  const items=sched().items;
+  const order=[...items.filter(i=>i.star),...items.filter(i=>!i.star)];
+  $("#sel").innerHTML=`<h3>Selected courses <small>star = priority · drag to reorder</small></h3>`+
+    (items.length?items.map((it,idx)=>{const c=BYID[it.id];return `<div class="srow ${it.on?"":"off"} ${bumped.has(c.id)?"bumped":""}" draggable="true" data-idx="${idx}" data-id="${c.id}">
+      <input type="checkbox" ${it.on?"checked":""} data-act="on" aria-label="Show ${esc(c.title)} on calendar">
+      <span class="dot" style="background:${col(c,"edge")}"></span>
+      <span class="nm">${esc(c.title)}<small>${c.term==="M"?"Mich":c.term==="L"?"Lent":"Easter"} · ${slotStr(c)}${bumped.has(c.id)?" · hidden (conflict)":""}</small>${clash.has(c.id)?' <span class="tag-conf">clashes</span>':""}</span>
+      <span style="display:flex">
+        <button class="icon ${it.star?"starred":""}" data-act="star" aria-label="Star" title="Star (keep over conflicts)">${ICON.star}</button>
+        <button class="icon" data-act="up" aria-label="Move up">${ICON.up}</button>
+        <button class="icon" data-act="down" aria-label="Move down">${ICON.down}</button>
+        <button class="icon" data-act="rm" aria-label="Remove">${ICON.x}</button>
+      </span></div>`}).join(""):`<div class="empty">Nothing selected yet. Press + next to a course to add it.</div>`);
+}
+function renderSchedSel(){
+  $("#sched-select").innerHTML=S.schedules.map((s,i)=>`<option value="${i}" ${i===S.cur?"selected":""}>${esc(s.name)} (${s.items.length})</option>`).join("");
+}
+function renderTerm(){["M","L","E"].forEach(t=>$("#t-"+t).setAttribute("aria-pressed",S.term===t));$("#cf").checked=S.cf;$("#sat").checked=S.sat}
+function render(){renderTerm();renderFilters();renderList();renderSchedSel();renderStats();renderCal();renderSel();save()}
+
+// ---------- Actions ----------
+function toggleCourse(id){
+  const s=sched();const i=s.items.findIndex(x=>x.id===id);
+  if(i>=0)s.items.splice(i,1);else s.items.push({id,on:true,star:false});
+  render();
+}
+function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
+
+document.addEventListener("click",e=>{
+  const tb=e.target.closest("[data-term]");if(tb){S.term=tb.dataset.term;render();return}
+  const f=e.target.closest("[data-f]");if(f){S.filters[f.dataset.f]=!S.filters[f.dataset.f];render();return}
+  const dy=e.target.closest("[data-day]");if(dy){const a=S.filters.days,d=dy.dataset.day;a.includes(d)?a.splice(a.indexOf(d),1):a.push(d);render();return}
+  const hr=e.target.closest("[data-hr]");if(hr){const a=S.filters.hours,d=hr.dataset.hr;a.includes(d)?a.splice(a.indexOf(d),1):a.push(d);render();return}
+  if(e.target.id==="clr"){S.filters.days=[];S.filters.hours=[];S.filters.areas=[];q="";$("#q").value="";render();return}
+  const row=e.target.closest(".row");
+  if(row){ if(e.target.closest("[data-act=toggle]"))toggleCourse(row.dataset.id); else{open=open===row.dataset.id?null:row.dataset.id;renderList()} return}
+  const blk=e.target.closest(".blk");if(blk){showCourse(BYID[blk.dataset.id]);return}
+  const sr=e.target.closest(".srow");
+  if(sr){const act=e.target.closest("[data-act]")?.dataset.act;const items=sched().items;const i=+sr.dataset.idx;
+    if(act==="star")items[i].star=!items[i].star;
+    else if(act==="rm")items.splice(i,1);
+    else if(act==="up"&&i>0)[items[i-1],items[i]]=[items[i],items[i-1]];
+    else if(act==="down"&&i<items.length-1)[items[i+1],items[i]]=[items[i],items[i+1]];
+    else if(act==="on")items[i].on=e.target.checked;
+    else if(!act){const c=BYID[sr.dataset.id];if(c.term!==S.term){S.term=c.term}else showCourse(c)}
+    render();return}
+});
+$("#q").addEventListener("input",e=>{q=e.target.value;renderList();renderFilters()});
+document.addEventListener("change",e=>{if(e.target.id==="area-sel"){S.filters.areas=e.target.value?[e.target.value]:[];render()}});
+$("#cf").addEventListener("change",e=>{S.cf=e.target.checked;render()});
+$("#sat").addEventListener("change",e=>{S.sat=e.target.checked;render()});
+$("#sched-select").addEventListener("change",e=>{S.cur=+e.target.value;render()});
+$("#list").addEventListener("mouseover",e=>{const r=e.target.closest(".row");const id=r?r.dataset.id:null;if(id!==hover){hover=id;renderCal()}});
+$("#list").addEventListener("mouseleave",()=>{hover=null;renderCal()});
+window.addEventListener("resize",()=>renderCal());
+
+// drag reorder
+let dragIdx=null;
+$("#sel").addEventListener("dragstart",e=>{const r=e.target.closest(".srow");if(!r)return;dragIdx=+r.dataset.idx;r.classList.add("drag");e.dataTransfer.effectAllowed="move"});
+$("#sel").addEventListener("dragover",e=>{const r=e.target.closest(".srow");if(!r)return;e.preventDefault();document.querySelectorAll(".srow.over").forEach(x=>x.classList.remove("over"));r.classList.add("over")});
+$("#sel").addEventListener("drop",e=>{const r=e.target.closest(".srow");if(!r||dragIdx===null)return;e.preventDefault();const items=sched().items;const [m]=items.splice(dragIdx,1);items.splice(+r.dataset.idx,0,m);dragIdx=null;render()});
+$("#sel").addEventListener("dragend",()=>{dragIdx=null;renderSel()});
+
+// mobile tabs
+function mtab(which){$("#mt-courses").setAttribute("aria-pressed",which==="c");$("#mt-schedule").setAttribute("aria-pressed",which==="s");$("#pane-courses").dataset.mhide=which==="c"?"0":"1";$("#pane-sched").dataset.mhide=which==="s"?"0":"1";if(which==="s")renderCal()}
+$("#mt-courses").onclick=()=>mtab("c");$("#mt-schedule").onclick=()=>mtab("s");
+
+// theme
+$("#btn-theme").onclick=()=>{const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==="dark":matchMedia("(prefers-color-scheme: dark)").matches;r.dataset.theme=dark?"light":"dark";renderCal()};
+
+// ---------- Modals ----------
+function modal(html,wire){const root=$("#modal-root");root.innerHTML=`<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;const bg=root.firstChild;bg.addEventListener("click",e=>{if(e.target===bg||e.target.closest("[data-close]"))root.innerHTML=""});wire&&wire(bg);const f=bg.querySelector("button,input,textarea");f&&f.focus()}
+document.addEventListener("keydown",e=>{if(e.key==="Escape")$("#modal-root").innerHTML=""});
+function showCourse(c){
+  const it=inSched(c.id);
+  modal(`<h2>${esc(c.title)}</h2>${details(c)}<div class="row-btns"><button class="btn ${it?"danger":"primary"}" id="m-tog">${it?"Remove from schedule":"Add to schedule"}</button><button class="btn" data-close>Close</button></div>`,
+    bg=>bg.querySelector("#m-tog").onclick=()=>{toggleCourse(c.id);$("#modal-root").innerHTML=""});
+}
+async function copy(text,ta){try{await navigator.clipboard.writeText(text);toast("Copied")}catch(e){ta&&(ta.focus(),ta.select());toast("Press ⌘C / Ctrl+C to copy")}}
+
+$("#sched-new").onclick=()=>modal(`<h2>New schedule</h2><input type="text" id="m-name" value="Schedule ${S.schedules.length+1}"><div class="row-btns"><button class="btn" data-close>Cancel</button><button class="btn primary" id="m-ok">Create</button></div>`,
+  bg=>bg.querySelector("#m-ok").onclick=()=>{S.schedules.push({name:bg.querySelector("#m-name").value.trim()||"Untitled",items:[]});S.cur=S.schedules.length-1;$("#modal-root").innerHTML="";render()});
+$("#sched-more").onclick=()=>modal(`<h2>Manage “${esc(sched().name)}”</h2><input type="text" id="m-name" value="${esc(sched().name)}" aria-label="Name"><div class="row-btns">
+  <button class="btn danger" id="m-del" ${S.schedules.length<2?"disabled":""}>Delete</button><button class="btn" id="m-dup">Duplicate</button><button class="btn primary" id="m-ok">Save name</button></div>`,
+  bg=>{bg.querySelector("#m-ok").onclick=()=>{sched().name=bg.querySelector("#m-name").value.trim()||sched().name;$("#modal-root").innerHTML="";render()};
+    bg.querySelector("#m-dup").onclick=()=>{S.schedules.push({name:sched().name+" (copy)",items:JSON.parse(JSON.stringify(sched().items))});S.cur=S.schedules.length-1;$("#modal-root").innerHTML="";render()};
+    const del=bg.querySelector("#m-del");del.onclick=()=>{if(del.dataset.sure){S.schedules.splice(S.cur,1);S.cur=0;$("#modal-root").innerHTML="";render()}else{del.dataset.sure=1;del.textContent="Click again to delete"}}});
+
+$("#btn-share").onclick=()=>{
+  const code=btoa(unescape(encodeURIComponent(JSON.stringify({n:sched().name,i:sched().items.map(i=>[i.id,i.on?1:0,i.star?1:0])}))));
+  modal(`<h2>Import / export</h2><p>Copy this code to send your schedule to a friend or move it to another device. Paste a code below to import it as a new schedule.</p>
+  <textarea id="m-code" readonly>${code}</textarea><div class="row-btns"><button class="btn" id="m-copy">Copy code</button></div>
+  <textarea id="m-in" placeholder="Paste a schedule code here" style="min-height:80px"></textarea>
+  <div class="row-btns"><button class="btn" data-close>Close</button><button class="btn primary" id="m-imp">Import</button></div>`,
+  bg=>{bg.querySelector("#m-copy").onclick=()=>copy(code,bg.querySelector("#m-code"));
+    bg.querySelector("#m-imp").onclick=()=>{try{const o=JSON.parse(decodeURIComponent(escape(atob(bg.querySelector("#m-in").value.trim()))));const items=o.i.filter(x=>BYID[x[0]]).map(x=>({id:x[0],on:!!x[1],star:!!x[2]}));S.schedules.push({name:o.n||"Imported",items});S.cur=S.schedules.length-1;$("#modal-root").innerHTML="";render();toast("Imported "+items.length+" courses")}catch(e){toast("That code isn't valid. Copy the whole code and try again.")}}});
+};
+
+// ---------- ICS ----------
+function ymd(d){return d.toISOString().slice(0,10).replace(/-/g,"")}
+function addDays(s,n){const d=new Date(s+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
+function hm(h){return String(Math.floor(h)).padStart(2,"0")+String(Math.round((h%1)*60)).padStart(2,"0")+"00"}
+function firstOn(start,days){const js=["S","M","Tu","W","Th","F","S"];for(let i=0;i<7;i++){const dt=addDays(start,i);const wd=new Date(dt+"T12:00:00Z").getUTCDay();const k=wd===6?"S":wd===0?null:js[wd];if(k&&days.includes(k))return dt}}
+function icsEsc(s){return s.replace(/[\\;,]/g,m=>"\\"+m).replace(/\n/g,"\\n")}
+function buildICS(){
+  const {shown}=resolved();
+  const stamp=new Date().toISOString().replace(/[-:]/g,"").slice(0,15)+"Z";
+  const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//partiiischedule.io//EN","CALSCALE:GREGORIAN","X-WR-CALNAME:"+icsEsc(sched().name),
+   "BEGIN:VTIMEZONE","TZID:Europe/London","BEGIN:DAYLIGHT","TZOFFSETFROM:+0000","TZOFFSETTO:+0100","TZNAME:BST","DTSTART:19700329T010000","RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU","END:DAYLIGHT","BEGIN:STANDARD","TZOFFSETFROM:+0100","TZOFFSETTO:+0000","TZNAME:GMT","DTSTART:19701025T020000","RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU","END:STANDARD","END:VTIMEZONE"];
+  for(const c of shown){
+    const T=TERMS[c.term];const first=firstOn(c.first||T.start,c.days);
+    const desc=[c.lect,...c.notes,"Check timetable.cam.ac.uk for changes."].join("\n");
+    L.push("BEGIN:VEVENT","UID:"+c.id+"@partiiischedule.io","DTSTAMP:"+stamp,"SUMMARY:"+icsEsc(c.title),"LOCATION:"+icsEsc(c.room+(c.room.startsWith("MR")?", CMS":"")),
+      "DESCRIPTION:"+icsEsc(desc),"DTSTART;TZID=Europe/London:"+first.replace(/-/g,"")+"T"+hm(c.hour),"DTEND;TZID=Europe/London:"+first.replace(/-/g,"")+"T"+hm(c.hour+c.dur),
+      "RRULE:FREQ=WEEKLY;BYDAY="+c.days.map(d=>ICSDAY[d]).join(",")+(c.count?";COUNT="+c.count:";UNTIL="+T.end.replace(/-/g,"")+"T235959Z"));
+    c.ex.forEach(x=>L.push("EXDATE;TZID=Europe/London:"+x.replace(/-/g,"")+"T"+hm(c.hour)));
+    L.push("END:VEVENT");
+    c.add.forEach(([d,h,dur,room],k)=>L.push("BEGIN:VEVENT","UID:"+c.id+"-extra"+k+"@partiiischedule.io","DTSTAMP:"+stamp,"SUMMARY:"+icsEsc(c.title+" (rescheduled)"),"LOCATION:"+icsEsc(room+", CMS"),
+      "DTSTART;TZID=Europe/London:"+d.replace(/-/g,"")+"T"+hm(h),"DTEND;TZID=Europe/London:"+d.replace(/-/g,"")+"T"+hm(h+dur),"END:VEVENT"));
+  }
+  L.push("END:VCALENDAR");
+  return L.join("\r\n");
+}
+$("#btn-export").onclick=async()=>{
+  const {shown}=resolved();
+  if(!shown.length){toast("Add some courses first");return}
+  const ics=buildICS();
+  modal(`<h2>Export to your calendar</h2><p>${shown.length} course${shown.length>1?"s":""} from “${esc(sched().name)}”, repeating weekly through each term, with the published reschedules applied. Download the file, then import it into Google Calendar, Outlook or Apple Calendar.</p>
+  <textarea id="m-ics" readonly>${esc(ics)}</textarea>
+  <div class="row-btns"><button class="btn" data-close>Close</button><button class="btn" id="m-copy">Copy</button><button class="btn primary" id="m-save">Download .ics</button></div>`,
+  async bg=>{bg.querySelector("#m-copy").onclick=()=>copy(ics,bg.querySelector("#m-ics"));
+    bg.querySelector("#m-save").onclick=()=>{const url=URL.createObjectURL(new Blob([ics],{type:"text/calendar"}));const a=document.createElement("a");a.href=url;a.download=slug(sched().name)+"-partiii.ics";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+  });
+};
+
+// ---------- Boot: realistic sample on first visit ----------
+let fresh=false;try{fresh=!localStorage.getItem(STORE)}catch(e){fresh=true}
+if(fresh&&!sched().items.length){
+  sched().name="Example: pure maths";
+  ["M-algebraic-topology","M-algebraic-geometry","M-analytic-number-theory","M-commutative-algebra","M-lie-algebras-and-their-representations","M-local-fields","L-elliptic-curves","L-homotopy-theory","L-riemannian-geometry"].forEach(id=>sched().items.push({id,on:true,star:false}));
+}
+render();
+</script>
+
+</body>
+</html>
