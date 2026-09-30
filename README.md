@@ -1,6 +1,6 @@
 # partiiischedule.io
 
-**Live site: https://lizzykjones.github.io/partiiischedule/**
+**Live site: https://elizabethkayjones.com/partiiischedule/**
 
 A Hyperschedule-style timetable planner for Cambridge Mathematical Tripos Part III (2026–27).
 
